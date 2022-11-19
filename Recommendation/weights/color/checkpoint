@@ -1,0 +1,2 @@
+model_checkpoint_path: "color_prediction.weights"
+all_model_checkpoint_paths: "color_prediction.weights"

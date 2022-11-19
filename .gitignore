@@ -1,0 +1,14 @@
+kaggle.json
+Recommendation/data/images/*
+Recommendation/data/*.zip
+Recommendation/data/customers.csv
+Recommendation/data/transactions_train.csv
+Recommendation/data/sample_submission.csv
+Recommendation/.ipynb_checkpoints/
+
+Segmentation/data/*.npy
+Segmentation/data/images
+Segmentation/data/labels
+Segmentation/data/labels_raw
+Segmentation/data/metadata.csv
+

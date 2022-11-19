@@ -1,0 +1,2 @@
+model_checkpoint_path: "image_segmentation.weights"
+all_model_checkpoint_paths: "image_segmentation.weights"

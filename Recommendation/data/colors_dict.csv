@@ -1,0 +1,51 @@
+,label,code,oh
+0,Unknown,-1,0
+1,Other,1,1
+2,Transparent,2,2
+3,Silver,3,3
+4,Bronze/Copper,4,4
+5,Gold,5,5
+6,Light Grey,6,6
+7,Grey,7,7
+8,Dark Grey,8,8
+9,Black,9,9
+10,White,10,10
+11,Off White,11,11
+12,Light Beige,12,12
+13,Beige,13,13
+14,Dark Beige,14,14
+15,Greyish Beige,15,15
+16,Yellowish Brown,17,16
+17,Greenish Khaki,19,17
+18,Other Yellow,20,18
+19,Light Yellow,21,19
+20,Yellow,22,20
+21,Dark Yellow,23,21
+22,Other Orange,30,22
+23,Light Orange,31,23
+24,Orange,32,24
+25,Dark Orange,33,25
+26,Other Red,40,26
+27,Light Red,41,27
+28,Red,42,28
+29,Dark Red,43,29
+30,Other Pink,50,30
+31,Light Pink,51,31
+32,Pink,52,32
+33,Dark Pink,53,33
+34,Other Purple,60,34
+35,Light Purple,61,35
+36,Purple,62,36
+37,Dark Purple,63,37
+38,Other Blue,70,38
+39,Light Blue,71,39
+40,Blue,72,40
+41,Dark Blue,73,41
+42,Other Turquoise,80,42
+43,Light Turquoise,81,43
+44,Turquoise,82,44
+45,Dark Turquoise,83,45
+46,Other Green,90,46
+47,Light Green,91,47
+48,Green,92,48
+49,Dark Green,93,49
