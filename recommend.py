@@ -4,16 +4,79 @@ import os
 import re
 import cv2
 import random
+import webcolors
 from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+from typing import Tuple, List
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 import tensorflow as tf
 import tensorboard
 from keras.utils.vis_utils import plot_model
+
+def get_classes() -> dict[str,int]:
+    compression_dict = {
+        'bag':'accessories',
+        'belt':'accessories',
+        'boots':'shoes',
+        'bracelet':'accessories',
+        'clogs':'shoes',
+        'earrings':'accessories',
+        'flats':'shoes',
+        'glasses':'accessories',
+        'gloves':'accessories',
+        'heels':'shoes',
+        'loafers':'shoes',
+        'necklace':'accessories',
+        'pumps':'shoes',
+        'purse':'accessories',
+        'ring':'accessories',
+        'sandals':'shoes',
+        'sneakers':'shoes',
+        'stockings':'socks',
+        'sunglasses':'accessories',
+        'tie':'accessories',
+        'tights':'socks',
+        'wallet':'accessories',
+        'watch':'accessories',
+        'wedges':'shoes',
+        'sweatshirt':'hoodie',
+    }
+
+    pixel_values = []
+
+    class_dict = {}
+    with open('Segmentation/data/class_dict.csv','r') as cdf:
+        next(cdf)
+        for idx, line in enumerate(cdf):
+            spl = line.replace(" ","").replace("\n","").split(",")
+            name = spl[0]
+            pixel_values.append([[int(x) for x in spl[1:]]])
+            class_dict[name] = [idx,idx]
+
+
+
+    for k,v in compression_dict.items():
+        orig_idx = class_dict[k][0]
+        new_idx  = class_dict[v][1]
+        class_dict[k] = [orig_idx,new_idx]
+
+
+    classes = {}
+    i = 0
+    for c_name, (orig_idx, new_idx) in class_dict.items():
+        if orig_idx != new_idx:
+            pixel_values[new_idx].append(pixel_values[orig_idx][0])
+            pixel_values[orig_idx] = []
+        else:
+            classes[c_name] = i
+            i += 1
+
+    return classes
 
 def LoadData(imgPath:str=None, maskPath:str=None, shape:int=256, train_ratio:float=0.90, evaluate:bool=False):
     images = []
@@ -145,6 +208,69 @@ def LoadData(imgPath:str=None, maskPath:str=None, shape:int=256, train_ratio:flo
 #     return tf.data.Dataset.from_tensor_slices((images, masks))
     return images, masks
 
+def closest_colour(requested_colour):
+    min_colours = {}
+    for key, name in webcolors.CSS21_HEX_TO_NAMES.items():
+        r_c, g_c, b_c = webcolors.hex_to_rgb(key)
+        rd = (r_c - requested_colour[0]) ** 2
+        gd = (g_c - requested_colour[1]) ** 2
+        bd = (b_c - requested_colour[2]) ** 2
+        min_colours[(rd + gd + bd)] = name
+    return min_colours[min(min_colours.keys())]
+
+def get_colour_name(requested_colour):
+    try:
+        closest_name = actual_name = webcolors.rgb_to_name(requested_colour)
+    except ValueError:
+        closest_name = closest_colour(requested_colour)
+        actual_name = None
+    return actual_name, closest_name
+
+def get_top_colors_and_categories(masks:np.ndarray, images:np.ndarray, mask_idx:int) -> Tuple[List[str],List[str]]:
+    classes = get_classes()
+    inv_classes = {v: k for k, v in classes.items()}
+    exclusion_list = ['null','skin','hair','accessories']
+    indices = [v  for k,v in classes.items() if not k in exclusion_list]
+
+    top_classes = []
+    top_values  = []
+    masks = (masks == masks.max(axis=-1)[:,None]).astype('uint8')
+    filtered_masks = masks[mask_idx].T[indices]
+    for idx, mask in enumerate(filtered_masks):
+        print(mask.shape)
+        unique, counts = np.unique(mask, return_counts=True)
+        print(f"{unique}: {counts}")
+        if len(unique) > 1:
+            i = indices[idx]
+            if unique[1] == 1:
+                top_classes.append(inv_classes[i])
+                top_values.append(counts[1])
+            else:
+                top_classes.append(inv_classes[i])
+                top_values.append(counts[0])
+
+    np.amax(top_values)
+
+    top_values = np.array(top_values)
+    top_classes = np.array(top_classes)
+
+    ind = np.argpartition(top_values, -2)[-2:]
+    ind = ind[np.argsort(top_values[ind])]
+
+    top_classes = top_classes[ind]
+
+    colors = []
+    for tc in top_classes:
+        mask = (masks[mask_idx].T[classes[tc]].T).astype('uint8')
+
+        pixels = images[mask_idx][mask==1]
+
+        pixels = tuple(np.median(pixels,axis=0).astype('uint8'))
+        _, color = get_colour_name(pixels)
+        colors.append(color)
+
+    return top_classes, colors
+
 def GetModel(lr:float,visualize:bool=False) -> tf.keras.models.Sequential:
 
     # defining our CNN for encoding and decoding
@@ -179,54 +305,54 @@ def GetModel(lr:float,visualize:bool=False) -> tf.keras.models.Sequential:
         tf.keras.layers.Reshape((256,256,34)),
     ])
     if visualize:
-#         model.summary()
+        model.summary()
         plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
     
     model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=lr), loss='categorical_crossentropy', metrics=['acc'])
-    #model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=lr), loss='mean_squared_error', metrics=['acc'])
 
     return model
 
-def CountColors(img: np.ndarray) -> dict:
-    flattened = np.reshape(img,(256*256,3))
-    print(np.shape(flattened))
-#for pix in img:
-
-def run_model(evaluate:bool=False, load:bool=False, epoch:int=10, lr:float=5e-5, visualize:bool=False):
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("--evaluate",action='store_true')
-#     parser.add_argument("--load", action='store_true')
-#     parser.add_argument("--epoch", type=int, default=10)
-#     parser.add_argument("--lr", type=float, default=5e-5)
-
-#     args = parser.parse_args()
-
-    if evaluate:
+def run_model(evaluate:bool=False, load:bool=False, epoch:int=10, lr:float=5e-5, visualize:bool=False, inference:str=None):
+    if inference:
+        print("Running in inference mode...")
+    elif evaluate:
         print("Running in evaluation mode...")
     else:
         print("Running in training mode...")
         print(f"Hyperparameters: {epoch} epochs, {lr} learning rate")
 
-    print("Loading data...")
-    images, masks = LoadData(imgPath='data/images', maskPath='data/labels/pixel_level_labels_colored', shape=256, evaluate=evaluate)
-
-    #plt.subplot(1,2,1)
-    #plt.imshow(train['img'][1])
-    #plt.subplot(1,2,2)
-    #plt.imshow(train['mask'][1])
-    #plt.show()
+    if not inference:
+        print("Loading data...")
+        images, masks = LoadData(imgPath='data/images', maskPath='data/labels/pixel_level_labels_colored', shape=256, evaluate=evaluate)
 
     print("Compiling model...")
     model = GetModel(lr,visualize=visualize)
-    print(model)
 
-    if load or evaluate:
+    if load or evaluate or inference:
         print("Loading parameters for model...")
-        model.load_weights('weights/image_segmentation.weights')
-        print(model)
+        model.load_weights('Segmentation/weights/image_segmentation.weights')
 
     if True:
-        if evaluate:
+        if inference:
+            print("loading image to inference...")
+            try:
+                img = plt.imread(inference)
+                img = cv2.resize(img, (256, 256))
+            except:
+                print("Error, could not load image for inference!")
+                return
+
+            images = np.array([img])
+
+            print("Inferencing with model...")
+            predicted_masks = model.predict(images)
+            
+            classes, colors = get_top_colors_and_categories(predicted_masks,images,0)
+
+            print(classes)
+            print(colors)
+
+        elif evaluate:
             print("Evaluating model...")
             predicted_masks = model.predict(images)
             results = model.evaluate(images,masks)
@@ -235,14 +361,6 @@ def run_model(evaluate:bool=False, load:bool=False, epoch:int=10, lr:float=5e-5,
             print(f"output size: {np.shape(predicted_masks[0])}, desired size: {np.shape(masks[0])}")
             print(f"output dtype: {predicted_masks[0].dtype}, desired dtype: {masks[0].dtype}")
 
-#             for i in range(34):
-#                 plt.subplot(1,3,1)
-#                 plt.imshow(images[0])
-#                 plt.subplot(1,3,2)
-#                 plt.imshow(masks[0][:,:,i])
-#                 plt.subplot(1,3,3)
-#                 plt.imshow(predicted_masks[0][:,:,i])
-#                 plt.show()
             for i in range(5):
                 plt.subplot(1,3,1)
                 plt.imshow(images[i])
@@ -274,7 +392,8 @@ def run_model(evaluate:bool=False, load:bool=False, epoch:int=10, lr:float=5e-5,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--evaluate",action='store_true')
+    parser.add_argument("--inference", type=str, default=None)
+    parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load", action='store_true')
     parser.add_argument("--visualize", action='store_true')
     parser.add_argument("--epoch", type=int, default=10)
@@ -282,4 +401,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    run_model(args.evaluate, args.load, args.epoch, args.lr, args.visualize)
+    run_model(args.evaluate, args.load, args.epoch, args.lr, args.visualize, args.inference)
